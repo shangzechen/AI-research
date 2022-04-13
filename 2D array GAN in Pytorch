@@ -1,0 +1,98 @@
+import numpy as np
+import torch
+import torch.nn as nn
+
+import matplotlib.pyplot as plt
+from IPython.display import clear_output
+import seaborn as sns
+
+%matplotlib inline
+
+data=np.load('/content/dt_ts_arc_1c_40kHz_ld_14.npy')
+data=torch.FloatTensor(data)
+print(data)
+
+def get_uniform(batch_size):
+  return torch.rand(1,batch_size)+2000
+
+data=np.load('/content/dt_ts_arc_1c_40kHz_ld_14.npy')
+data=torch.FloatTensor(data)
+
+
+class Generator(nn.Module):
+    def __init__(self):
+
+        super().__init__()
+        self.main=nn.Sequential(
+            nn.Linear(in_features=800,out_features=64),
+            nn.ReLU(),
+            nn.Linear(in_features=64,out_features=800)
+        )
+  
+    def forward(self,x):
+      return self.main(x)
+
+class Discriminator(nn.Module):
+  def __init__(self):
+    super().__init__()
+    self.main=nn.Sequential(
+        nn.Linear(in_features=800,out_features=800),
+        nn.ReLU(),
+        nn.Linear(in_features=800,out_features=1),
+        nn.Sigmoid()
+    )
+  def forward(self,x):
+      return self.main(x)  
+
+gen=Generator()
+disc=Discriminator()
+
+generator_opt=torch.optim.SGD(gen.parameters(), lr=1e-3)
+discriminator_opt=torch.optim.SGD(disc.parameters(),lr=1e-3)
+
+def update_D(batch_size):
+    real_samples= data
+    prob_real_is_real=disc(real_samples)
+
+
+    noise= get_uniform(batch_size)
+    generated_samples=gen(noise)
+    prob_fake_is_fake=1-disc(generated_samples)
+
+    loss= (-torch.log(prob_real_is_real)-torch.log(prob_fake_is_fake)).mean()
+
+    discriminator_opt.zero_grad()
+    loss.backward()
+    discriminator_opt.step()
+    return loss.data.numpy().item()
+
+def update_G(batch_size):
+  
+    noise= get_uniform(batch_size)
+    generated_samples=gen(noise)
+    prob_fake_is_real= disc(generated_samples)
+    loss= (-torch.log(prob_fake_is_real)).mean()
+
+    generator_opt.zero_grad()
+    loss.backward()
+    generator_opt.step()
+
+    return loss.data.numpy().item()
+
+N_DISC_OPERATIONS = 10
+BATCH_SIZE = 800
+
+for i in range(1000000):
+    for _ in range (N_DISC_OPERATIONS):
+        update_D(BATCH_SIZE)
+
+    update_G(BATCH_SIZE)
+    if i%1==0:
+     clear_output(True)
+
+     a=gen(get_uniform(800)).data.numpy()
+     t = np.arange(1,801)
+     print(a)
+     plt.plot(t,a[0,], 'g') 
+     plt.legend()
+     plt.show()  
